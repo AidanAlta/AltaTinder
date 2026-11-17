@@ -1,0 +1,63 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.45 system-ui, sans-serif; background: #f4f4f1; color: #1c1c1a; }
+header { display: flex; gap: 20px; align-items: center; padding: 12px 20px; background: #fff; border-bottom: 1px solid #ddd; }
+header b { margin-right: auto; }
+header a { color: #555; text-decoration: none; }
+header a.on { color: #000; font-weight: 600; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+main.narrow { max-width: 560px; }
+h2 { margin: 0 0 16px; }
+button, select, input { font: inherit; padding: 8px 12px; border: 1px solid #bbb; border-radius: 8px; background: #fff; }
+button { cursor: pointer; }
+@media (hover: hover) { button:hover { background: #eee; } button.primary:hover { background: #3a3a37; } }
+button:disabled { opacity: .45; cursor: default; }
+a.btn { padding: 8px 12px; border-radius: 8px; background: #1c1c1a; color: #fff; text-decoration: none; }
+button.primary { background: #1c1c1a; color: #fff; border-color: #1c1c1a; }
+button.link { border: 0; background: none; padding: 0; color: #06c; }
+button.link:hover { background: none; text-decoration: underline; }
+.row.center { justify-content: center; }
+.hint { text-align: center; margin-top: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.empty { color: #777; text-align: center; padding: 40px 0; }
+#error { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #b3261e; color: #fff; padding: 10px 16px; border-radius: 8px; max-width: 90vw; }
+.muted { color: #777; font-size: 14px; }
+
+.deck { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 14px 16px; }
+.bar { height: 6px; background: #e3e3df; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.bar > div { height: 100%; background: #2e7d32; }
+
+.card { background: #fff; border: 1px solid #ddd; border-radius: 16px; padding: 32px 28px; min-height: 260px; margin: 16px 0; box-shadow: 0 4px 16px rgba(0,0,0,.06); touch-action: pan-y; user-select: none; cursor: grab; }
+
+.card { transition: border-color .1s, background .1s; }
+.card.going-yes { border-color: #2e7d32; background: #f1f9f1; }
+.card.going-no { border-color: #b3261e; background: #fdf3f2; }
+.card a { color: #06c; }
+.card h1 { margin: 0 0 20px; font-size: 28px; overflow-wrap: anywhere; }
+.card dt { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #777; }
+.card dd { margin: 0 0 14px; overflow-wrap: anywhere; }
+.actions { display: flex; gap: 12px; }
+.actions button { flex: 1; padding: 14px; font-size: 18px; font-weight: 600; }
+.actions .no { border-color: #b3261e; } .actions .yes { border-color: #2e7d32; }
+.no { color: #b3261e; } .yes { color: #2e7d32; }
+
+table { width: 100%; min-width: 620px; border-collapse: collapse; background: #fff; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e6e6e2; vertical-align: top; overflow-wrap: break-word; }
+th { background: #fafaf8; white-space: nowrap; }
+.tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
+.consensus_yes { background: #d9efda; } .consensus_no { background: #f6d9d6; } .disputed { background: #ffe7a8; }
+.single_vote, .unswiped, .archived { background: #e9e9e5; } .active { background: #d9efda; }
+dialog { border: 1px solid #ccc; border-radius: 12px; width: min(520px, 92vw); padding: 20px; }
+.msg { padding: 8px 0; border-bottom: 1px solid #eee; }
+.chip { border: 2px solid transparent; font-size: 13px; padding: 4px 10px; }
+.chip:hover { filter: brightness(.96); }
+.chip.picked { border-color: #1c1c1a; }
+.chip.consensus_yes:hover { background: #d9efda; } .chip.consensus_no:hover { background: #f6d9d6; } .chip.disputed:hover { background: #ffe7a8; }
+.chip.single_vote:hover, .chip.unswiped:hover { background: #e9e9e5; }
+.scroll { overflow-x: auto; }
+.thread { max-height: 45vh; overflow-y: auto; }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+@media (max-width: 600px) {
+  header { gap: 12px; padding: 10px 14px; } header b { display: none; }
+  main { padding: 16px 14px; } .card { padding: 24px 20px; min-height: 220px; } .card h1 { font-size: 23px; }
+}
