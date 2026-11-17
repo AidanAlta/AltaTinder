@@ -42,12 +42,6 @@ function showError(e) {
   showError.t = setTimeout(() => (box.hidden = true), 8000);
 }
 
-function getUser() {
-  try { return localStorage.getItem("swipe_user") || ""; } catch { return ""; }
-}
-function setUser(name) {
-  try { localStorage.setItem("swipe_user", name); } catch {}
-}
 function store(key, value) {
   try {
     if (value === undefined) return localStorage.getItem(key);
@@ -69,14 +63,124 @@ function linkify(value) {
   return el("a", { href: /^https?:\/\//i.test(s) ? s : "https://" + s, target: "_blank", rel: "noopener" }, s);
 }
 
-function run(fn) {
+function ready() {
   if (!configured) {
     fill(app, el("p", { class: "empty" }, "Set your Supabase URL and key in config.js first."));
-    return;
+    return false;
   }
   if (!db) {
     fill(app, el("p", { class: "empty" }, "Couldn't load the Supabase library. Check your connection and reload."));
-    return;
+    return false;
   }
-  Promise.resolve().then(fn).catch(showError);
+  return true;
+}
+
+function run(fn) {
+  if (ready()) Promise.resolve().then(fn).catch(showError);
+}
+
+// ---------- Sign-in (Alta email only) ----------
+
+const DOMAIN = "@altatechnologies.com";
+let me = null; // signed-in email, lowercase
+const shortName = (email) => String(email || "").split("@")[0];
+
+// Page entry point: make sure someone is signed in, then run the page.
+function start(fn) {
+  if (!ready()) return;
+  (async () => {
+    me = (await currentEmail()) || (await signIn());
+    showWho();
+    db.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") location.reload(); });
+    await fn();
+  })().catch(showError);
+}
+
+async function currentEmail() {
+  const { data } = await db.auth.getSession();
+  const email = data.session?.user?.email?.toLowerCase();
+  return email && email.endsWith(DOMAIN) ? email : null;
+}
+
+function showWho() {
+  document.querySelector("header .who")?.remove();
+  document.querySelector("header").append(
+    el("span", { class: "who muted" }, shortName(me), " · ",
+      el("button", { class: "link", onclick: () => signOut() }, "Sign out")));
+}
+
+async function signOut() {
+  store("swipe_deck", null);
+  await db.auth.signOut();
+  location.reload();
+}
+
+function authMessage(e) {
+  const code = e?.code || "", msg = e?.message || String(e);
+  if (/database error saving new user|altatechnologies/i.test(msg)) return "Only @altatechnologies.com email addresses can sign in.";
+  if (code === "email_address_not_authorized") return "Sign-in emails can't reach this address yet. Ask the app admin to add you.";
+  if (code === "over_email_send_rate_limit" || /rate limit/i.test(msg)) return "Too many sign-in emails were sent recently. Wait a while and try again.";
+  if (/security purposes|only request this after/i.test(msg)) return "Wait a minute before asking for another code.";
+  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That code is wrong or has expired. Check the latest email, or send a new code.";
+  return msg;
+}
+
+// Two steps: email -> code. Resolves with the signed-in email.
+function signIn() {
+  return new Promise((resolve) => {
+    const note = el("p", { class: "form-error", role: "alert" });
+    const say = (text) => (note.textContent = text || "");
+
+    const askEmail = () => {
+      const email = el("input", { type: "email", placeholder: "you" + DOMAIN, value: store("last_email") || "", autocomplete: "email", style: "flex:1;min-width:0" });
+      const send = el("button", { class: "primary" }, "Send code");
+      const submit = async (e) => {
+        e.preventDefault();
+        const addr = email.value.trim().toLowerCase();
+        if (!addr) return email.focus();
+        if (!addr.endsWith(DOMAIN)) { say("Use your " + DOMAIN + " email."); return email.focus(); }
+        say("");
+        send.disabled = true;
+        send.textContent = "Sending…";
+        const { error } = await db.auth.signInWithOtp({ email: addr, options: { emailRedirectTo: location.origin + location.pathname } });
+        send.disabled = false;
+        send.textContent = "Send code";
+        if (error) return say(authMessage(error));
+        store("last_email", addr);
+        askCode(addr);
+      };
+      fill(app,
+        el("h2", null, "Sign in"),
+        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in code."),
+        el("form", { class: "row", onsubmit: submit }, email, send),
+        note);
+      email.focus();
+    };
+
+    const askCode = (addr) => {
+      const code = el("input", { inputmode: "numeric", autocomplete: "one-time-code", placeholder: "Code", maxlength: 10, style: "flex:1;min-width:0;letter-spacing:.15em" });
+      const go = el("button", { class: "primary" }, "Sign in");
+      const submit = async (e) => {
+        e.preventDefault();
+        const token = code.value.replace(/\s/g, "");
+        if (!token) return code.focus();
+        go.disabled = true;
+        const { error } = await db.auth.verifyOtp({ email: addr, token, type: "email" });
+        go.disabled = false;
+        if (error) { say(authMessage(error)); return code.select(); }
+        resolve(addr);
+      };
+      fill(app,
+        el("h2", null, "Check your email"),
+        el("p", { class: "muted" }, "We sent a code to ", el("b", null, addr), ". Enter it below, or click the link in the email."),
+        el("form", { class: "row", onsubmit: submit }, code, go),
+        note,
+        el("p", { class: "muted" }, "Nothing yet? Check junk mail. ",
+          el("button", { class: "link", onclick: () => { say(""); askEmail(); } }, "Use a different email or send a new code")));
+      say("");
+      code.focus();
+    };
+
+    askEmail();
+  });
 }

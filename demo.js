@@ -1,6 +1,6 @@
 // Demo mode: set window.DEMO = true in config.js to run with no database.
-// Everything is saved in this browser only (localStorage). Switch names on the
-// swipe page to act as different people. Clear it with localStorage.removeItem("fakedb").
+// Everything is saved in this browser only (localStorage). Sign out and back in with another
+// @altatechnologies.com address to act as a different person. Clear it with localStorage.removeItem("fakedb").
 if (window.DEMO) {
   window.supabase = { createClient() {
     const load = () => JSON.parse(localStorage.fakedb || '{"decks":[],"items":[],"swipes":[],"comments":[],"seq":1}');
@@ -47,7 +47,15 @@ if (window.DEMO) {
         return { data: this.one ? out[0] ?? null : out, error: null };
       }
     }
-    return { from: (t) => new Q(t), rpc: (fn, a) => new Promise((r) => setTimeout(r, 15 + Math.random() * 25)).then(() => { const s = load();
+    // Fake sign-in: any @altatechnologies.com address, any code.
+  const auth = {
+    async getSession() { const e = localStorage.demo_email; return { data: { session: e ? { user: { email: e } } : null }, error: null }; },
+    async signInWithOtp() { return { error: null }; },
+    async verifyOtp({ email }) { localStorage.demo_email = email; return { data: {}, error: null }; },
+    async signOut() { localStorage.removeItem("demo_email"); return { error: null }; },
+    onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
+  };
+  return { auth, from: (t) => new Q(t), rpc: (fn, a) => new Promise((r) => setTimeout(r, 15 + Math.random() * 25)).then(() => { const s = load();
       if (fn === "deck_progress") return { error: null, data: s.decks.filter((d) => d.status === "active").map((d) => ({ id: d.id, name: d.name, total: s.items.filter((i) => i.deck_id === d.id).length, done: s.swipes.filter((w) => w.deck_id === d.id && w.user_name === a.p_user).length })) };
       const mine = new Set(s.swipes.filter((w) => w.user_name === a.p_user).map((w) => w.item_id));
       return { error: null, data: s.items.filter((i) => i.deck_id === a.p_deck && !mine.has(i.id)).sort((x, y) => x.position - y.position).slice(0, a.p_limit) }; }) };
@@ -55,7 +63,7 @@ if (window.DEMO) {
   window.SUPABASE_URL = "demo";
   document.addEventListener("DOMContentLoaded", () => {
     const b = document.createElement("div");
-    b.textContent = "Demo mode — data is saved in this browser only.";
+    b.textContent = "Demo mode — any code signs you in. Data is saved in this browser only.";
     b.style.cssText = "background:#ffe7a8;text-align:center;padding:6px;font-size:13px";
     document.body.prepend(b);
   });

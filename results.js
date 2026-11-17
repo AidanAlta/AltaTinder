@@ -15,7 +15,6 @@ const controls = el("div", { class: "row" });
 const summary = el("div", { class: "row" });
 const tableBox = el("div");
 const dialog = el("dialog");
-app.append(el("h2", null, "Results"), controls, summary, tableBox, dialog);
 
 function select(label, options, value, onchange) {
   const s = el("select", { "aria-label": label, onchange: (e) => onchange(e.target.value) },
@@ -74,10 +73,10 @@ function setFilter(key, value) {
 }
 
 function renderControls() {
-  const who = f.user || "Anyone";
+  const who = f.user ? shortName(f.user) : "Anyone";
   fill(controls, 
     select("Deck", decks.map((d) => [d.id, d.name + (d.status === "archived" ? " (archived)" : "")]), deck.id, (id) => run(() => loadDeck(id))),
-    select("User", [["", "Everyone"], ...users.map((u) => [u, u + " only"])], f.user, (v) => setFilter("user", v)),
+    select("User", [["", "Everyone"], ...users.map((u) => [u, shortName(u) + " only"])], f.user, (v) => setFilter("user", v)),
     select("Vote", [["", "Any vote"], ["yes", `${who} voted yes`], ["no", `${who} voted no`]], f.direction, (v) => setFilter("direction", v)),
     select("Verdict", [["", "All verdicts"], ...Object.entries(VERDICTS)], f.verdict, (v) => setFilter("verdict", v)),
     f.user || f.direction || f.verdict
@@ -93,7 +92,7 @@ function renderControls() {
         `${label}: ${n(v).toLocaleString()}`)),
     el("span", { class: "muted", style: "margin-left:auto" },
       users.length
-        ? users.map((u) => `${u} ${rows.filter((r) => r.votes[u]).length.toLocaleString()}/${rows.length.toLocaleString()}`).join(" · ")
+        ? users.map((u) => `${shortName(u)} ${rows.filter((r) => r.votes[u]).length.toLocaleString()}/${rows.length.toLocaleString()}`).join(" · ")
         : "Nobody has swiped this deck yet"));
 }
 
@@ -107,7 +106,7 @@ function renderTable() {
 
   fill(tableBox, 
     list.length ? el("div", { class: "scroll" }, el("table", null,
-      el("tr", null, ["#", deck.title_field, ...details, ...users, "Verdict", "Comments"].map((h) => el("th", null, h))),
+      el("tr", null, ["#", deck.title_field, ...details, ...users.map(shortName), "Verdict", "Comments"].map((h) => el("th", null, h))),
       slice.map((r) => {
         const count = (comments.get(r.item_id) || []).length;
         return el("tr", null,
@@ -132,26 +131,23 @@ function openThread(r) {
     const list = comments.get(r.item_id) || [];
     fill(thread, ...(list.length
       ? list.map((m) => el("div", { class: "msg" },
-          el("b", null, m.user_name), " ",
+          el("b", null, shortName(m.user_name)), " ",
           el("span", { class: "muted" }, new Date(m.timestamp).toLocaleString()),
           el("div", null, m.message)))
       : [el("p", { class: "muted" }, "No comments yet.")]));
     thread.scrollTop = thread.scrollHeight;
   };
-  const name = el("input", { placeholder: "Your name", "aria-label": "Your name", value: getUser(), size: 10, maxlength: 40 });
   const input = el("input", { placeholder: "Write a comment…", "aria-label": "Comment", style: "flex:1;min-width:0", maxlength: 2000 });
   const send = el("button", { class: "primary" }, "Post");
   const post = (e) => {
     e.preventDefault();
-    const user_name = name.value.trim(), message = input.value.trim();
-    if (!user_name) return name.focus();
+    const message = input.value.trim();
     if (!message) return input.focus();
     send.disabled = true;
     run(async () => {
       try {
         const saved = must(await db.from("comments")
-          .insert({ deck_id: deck.id, item_id: r.item_id, user_name, message }).select().single());
-        setUser(user_name);
+          .insert({ deck_id: deck.id, item_id: r.item_id, user_name: me, message }).select().single());
         addComment(saved);
         input.value = "";
         draw();
@@ -162,16 +158,16 @@ function openThread(r) {
     });
   };
   draw();
-  const votes = Object.entries(r.votes).map(([u, v]) => `${u}: ${v}`).join(" · ");
+  const votes = Object.entries(r.votes).map(([u, v]) => `${shortName(u)}: ${v}`).join(" · ");
   fill(dialog, 
     el("div", { class: "row" },
       el("b", { style: "margin-right:auto" }, titleOf(deck, r.fields)),
       el("button", { class: "link", onclick: () => dialog.close() }, "Close")),
     el("p", { class: "muted", style: "margin-top:0" }, el("span", { class: "tag " + r.verdict }, VERDICTS[r.verdict]), votes ? " " + votes : ""),
     thread,
-    el("form", { class: "row", style: "margin:14px 0 0;flex-wrap:nowrap", onsubmit: post }, name, input, send));
+    el("form", { class: "row", style: "margin:14px 0 0;flex-wrap:nowrap", onsubmit: post }, input, send));
   dialog.showModal();
-  (name.value ? input : name).focus();
+  input.focus();
 }
 dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); }); // click outside to close
 
@@ -180,11 +176,11 @@ function exportCsv() {
   if (!list.length) return showError(new Error("Nothing to export with these filters."));
   const data = list.map((r) => ({
     ...r.fields,
-    ...Object.fromEntries(users.map((u) => ["vote_" + u, r.votes[u] || ""])),
+    ...Object.fromEntries(users.map((u) => ["vote_" + shortName(u), r.votes[u] || ""])),
     yes_count: r.yes_count,
     no_count: r.no_count,
     verdict: r.verdict,
-    comments: (comments.get(r.item_id) || []).map((m) => `${m.user_name}: ${m.message}`).join(" | "),
+    comments: (comments.get(r.item_id) || []).map((m) => `${shortName(m.user_name)}: ${m.message}`).join(" | "),
   }));
   // ﻿ = BOM so Excel reads accented characters correctly.
   const url = URL.createObjectURL(new Blob(["﻿" + Papa.unparse(data)], { type: "text/csv;charset=utf-8" }));
@@ -195,4 +191,7 @@ function exportCsv() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-run(init);
+start(() => {
+  fill(app, el("h2", null, "Results"), controls, summary, tableBox, dialog);
+  return init();
+});

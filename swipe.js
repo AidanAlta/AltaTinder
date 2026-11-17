@@ -1,7 +1,7 @@
 const PAGE = 50;          // items fetched per request
 const REFILL_AT = 20;     // fetch more when the local queue drops to this
 
-let user = getUser();
+let user = null;          // signed-in email (set on start)
 let deck = null, queue = [], total = 0, done = 0;
 let last = null;              // last swiped item, for undo
 let exhausted = false, loadFailed = false;
@@ -11,40 +11,12 @@ const pending = new Set();    // in-flight swipe writes
 const TOUCH = matchMedia("(pointer: coarse)").matches;
 const pct = (n, of) => `width:${of ? Math.min(100, (100 * n) / of) : 0}%`;
 
-function askName() {
-  deck = null;
-  const input = el("input", { placeholder: "Your name", value: user, maxlength: 40 });
-  const save = () => run(async () => {
-    const name = input.value.trim();
-    if (!name) return input.focus();
-    user = await existingSpelling(name);
-    setUser(user);
-    await showDecks();
-  });
-  fill(app, 
-    el("h2", null, "Who's swiping?"),
-    el("form", { class: "row", onsubmit: (e) => { e.preventDefault(); save(); } }, input, el("button", { class: "primary" }, "Continue")),
-    el("p", { class: "muted" }, "Use the same name every time — it's how your progress is saved.")
-  );
-  input.focus();
-}
-
-// "aidan" and "Aidan" would otherwise be two people; reuse whichever spelling already has swipes.
-async function existingSpelling(name) {
-  if (name.includes("*")) return name;
-  const { data } = await db.from("swipes").select("user_name").ilike("user_name", name.replace(/[\\%_]/g, "\\$&")).limit(1);
-  return data?.[0]?.user_name || name;
-}
-
 async function showDecks() {
   deck = null;
   store("swipe_deck", null);
   const decks = must(await db.rpc("deck_progress", { p_user: user }));
   fill(app, 
-    el("div", { class: "row" },
-      el("h2", { style: "margin:0 auto 0 0" }, "Pick a deck"),
-      el("span", { class: "muted" }, "Swiping as ", el("b", null, user)),
-      el("button", { class: "link", onclick: askName }, "change")),
+    el("h2", null, "Pick a deck"),
     ...(decks.length ? decks.map((d) =>
       el("button", { class: "deck", onclick: () => run(() => openDeck(d.id)) },
         el("div", { class: "row", style: "margin:0" },
@@ -211,8 +183,8 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
-run(() => {
-  if (!user) return askName();
+start(() => {
+  user = me;
   const resume = store("swipe_deck");
   return resume ? openDeck(resume) : showDecks();
 });

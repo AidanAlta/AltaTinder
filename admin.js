@@ -1,7 +1,6 @@
 const CHUNK = 500;
 const uploadBox = el("section");
 const deckBox = el("section");
-app.append(el("h2", null, "New deck"), uploadBox, el("h2", { style: "margin-top:36px" }, "Decks"), deckBox);
 
 function resetUpload() {
   fill(uploadBox, 
@@ -98,7 +97,7 @@ async function loadDecks() {
     decks.map((d) => el("tr", null,
       el("td", null, el("b", null, d.name)),
       el("td", null, d.item_count.toLocaleString()),
-      el("td", null, Object.entries(d.progress).map(([u, n]) => el("div", null, `${u}: ${n.toLocaleString()}`)), Object.keys(d.progress).length ? null : "—"),
+      el("td", null, Object.entries(d.progress).map(([u, n]) => el("div", null, `${shortName(u)}: ${n.toLocaleString()}`)), Object.keys(d.progress).length ? null : "—"),
       el("td", null, new Date(d.created_at).toLocaleDateString()),
       el("td", null, el("span", { class: "tag " + d.status }, d.status)),
       el("td", null, el("a", { href: "results.html?deck=" + d.id }, "Results")),
@@ -112,5 +111,8 @@ async function loadDecks() {
     el("p", { class: "muted" }, "Archived decks are hidden from the swipe page. Their swipes and comments are kept and still show in Results."));
 }
 
-resetUpload();
-run(loadDecks);
+start(async () => {
+  fill(app, el("h2", null, "New deck"), uploadBox, el("h2", { style: "margin-top:36px" }, "Decks"), deckBox);
+  resetUpload();
+  await loadDecks();
+});
