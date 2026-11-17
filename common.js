@@ -96,6 +96,15 @@ function start(fn) {
   })().catch(showError);
 }
 
+// A failed sign-in link lands back here with the error in the address bar.
+function linkError() {
+  const p = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+  const msg = p.get("error_description");
+  if (!msg) return "";
+  history.replaceState(null, "", location.pathname);
+  return authMessage({ code: p.get("error_code") || "", message: msg });
+}
+
 async function currentEmail() {
   const { data } = await db.auth.getSession();
   const email = data.session?.user?.email?.toLowerCase();
@@ -120,20 +129,33 @@ function authMessage(e) {
   if (/database error saving new user|altatechnologies/i.test(msg)) return "Only @altatechnologies.com email addresses can sign in.";
   if (code === "email_address_not_authorized") return "Sign-in emails can't reach this address yet. Ask the app admin to add you.";
   if (code === "over_email_send_rate_limit" || /rate limit/i.test(msg)) return "Too many sign-in emails were sent recently. Wait a while and try again.";
-  if (/security purposes|only request this after/i.test(msg)) return "Wait a minute before asking for another code.";
-  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That code is wrong or has expired. Check the latest email, or send a new code.";
+  if (/security purposes|only request this after/i.test(msg)) return "Wait a minute before asking for another link.";
+  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That sign-in link has expired or was already used. Send a new one.";
   return msg;
 }
 
-// Two steps: email -> code. Resolves with the signed-in email.
+// Email a sign-in link. Resolves with the signed-in email once the link has been clicked
+// (in this tab, or in another tab of the same browser).
 function signIn() {
   return new Promise((resolve) => {
     const note = el("p", { class: "form-error", role: "alert" });
     const say = (text) => (note.textContent = text || "");
+    let waiting = null;
+
+    const done = (email) => {
+      clearInterval(waiting);
+      window.removeEventListener("focus", check);
+      resolve(email);
+    };
+    const check = async () => {
+      const email = await currentEmail();
+      if (email) done(email);
+    };
 
     const askEmail = () => {
+      clearInterval(waiting);
       const email = el("input", { type: "email", placeholder: "you" + DOMAIN, value: store("last_email") || "", autocomplete: "email", style: "flex:1;min-width:0" });
-      const send = el("button", { class: "primary" }, "Send code");
+      const send = el("button", { class: "primary" }, "Email me a link");
       const submit = async (e) => {
         e.preventDefault();
         const addr = email.value.trim().toLowerCase();
@@ -144,43 +166,33 @@ function signIn() {
         send.textContent = "Sending…";
         const { error } = await db.auth.signInWithOtp({ email: addr, options: { emailRedirectTo: location.origin + location.pathname } });
         send.disabled = false;
-        send.textContent = "Send code";
+        send.textContent = "Email me a link";
         if (error) return say(authMessage(error));
         store("last_email", addr);
-        askCode(addr);
+        checkInbox(addr);
       };
       fill(app,
         el("h2", null, "Sign in"),
-        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in code."),
+        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in link."),
         el("form", { class: "row", onsubmit: submit }, email, send),
         note);
       email.focus();
     };
 
-    const askCode = (addr) => {
-      const code = el("input", { inputmode: "numeric", autocomplete: "one-time-code", placeholder: "Code", maxlength: 10, style: "flex:1;min-width:0;letter-spacing:.15em" });
-      const go = el("button", { class: "primary" }, "Sign in");
-      const submit = async (e) => {
-        e.preventDefault();
-        const token = code.value.replace(/\s/g, "");
-        if (!token) return code.focus();
-        go.disabled = true;
-        const { error } = await db.auth.verifyOtp({ email: addr, token, type: "email" });
-        go.disabled = false;
-        if (error) { say(authMessage(error)); return code.select(); }
-        resolve(addr);
-      };
+    const checkInbox = (addr) => {
+      say("");
       fill(app,
         el("h2", null, "Check your email"),
-        el("p", { class: "muted" }, "We sent a code to ", el("b", null, addr), ". Enter it below, or click the link in the email."),
-        el("form", { class: "row", onsubmit: submit }, code, go),
-        note,
-        el("p", { class: "muted" }, "Nothing yet? Check junk mail. ",
-          el("button", { class: "link", onclick: () => { say(""); askEmail(); } }, "Use a different email or send a new code")));
-      say("");
-      code.focus();
+        el("p", null, "We sent a sign-in link to ", el("b", null, addr), ". Click it and you're in."),
+        el("p", { class: "muted" }, "Open it in this browser to stay signed in here. Nothing yet? Check junk mail, or ",
+          el("button", { class: "link", onclick: askEmail }, "send it again"), "."),
+        note);
+      // The link usually opens a new tab; this tab notices the sign-in and carries on.
+      waiting = setInterval(check, 2000);
+      window.addEventListener("focus", check);
     };
 
     askEmail();
+    say(linkError());
   });
 }
