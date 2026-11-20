@@ -130,11 +130,11 @@ function authMessage(e) {
   if (code === "email_address_not_authorized") return "Sign-in emails can't reach this address yet. Ask the app admin to add you.";
   if (code === "over_email_send_rate_limit" || /rate limit/i.test(msg)) return "Too many sign-in emails were sent recently. Wait a while and try again.";
   if (/security purposes|only request this after/i.test(msg)) return "Wait a minute before asking for another link.";
-  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That link or code has expired or was already used. Type the code from your newest sign-in email instead, or send a new one.";
+  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That sign-in link has expired or was already used. Send a new one and use the newest email.";
   return msg;
 }
 
-// Email a sign-in code (the email also has a link). Resolves with the signed-in email once the link has been clicked
+// Email a sign-in link (plus a code, once the email template includes one). Resolves with the signed-in email once the link has been clicked
 // (in this tab, or in another tab of the same browser).
 function signIn() {
   return new Promise((resolve) => {
@@ -173,14 +173,14 @@ function signIn() {
       };
       fill(app,
         el("h2", null, "Sign in"),
-        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in code."),
+        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in link."),
         el("form", { class: "row", onsubmit: submit }, email, send),
         note);
       email.focus();
     };
 
     const checkInbox = (addr) => {
-      const code = el("input", { inputmode: "numeric", autocomplete: "one-time-code", placeholder: "Code from the email", maxlength: 10, style: "flex:1;min-width:0;letter-spacing:.1em" });
+      const code = el("input", { inputmode: "numeric", autocomplete: "one-time-code", placeholder: "Code (if your email has one)", maxlength: 10, style: "flex:1;min-width:0;letter-spacing:.1em" });
       const go = el("button", { class: "primary" }, "Sign in");
       const submit = async (e) => {
         e.preventDefault();
@@ -195,7 +195,7 @@ function signIn() {
       say("");
       fill(app,
         el("h2", null, "Check your email"),
-        el("p", null, "We sent a sign-in email to ", el("b", null, addr), ". Type the code from it below."),
+        el("p", null, "We sent a sign-in email to ", el("b", null, addr), ". Click the link in it, or type the code if it has one."),
         el("form", { class: "row", onsubmit: submit }, code, go),
         note,
         el("p", { class: "muted" }, "Nothing yet? Check junk mail, or ",
