@@ -11,6 +11,10 @@ Static HTML/JS on GitHub Pages + Supabase Postgres.
 3. **Config** — copy the project URL and anon (publishable) key from Project Settings → API into `config.js`, commit, push.
 4. **Sign-in settings** (Supabase dashboard → Authentication):
    - **URL Configuration** → Site URL `https://aidanalta.github.io/AltaTinder/`, and add the same address under Redirect URLs.
+   - **Emails** → in both **Magic link** and **Confirm signup**, add this line so the email carries a code. Outlook's link scanner often uses up the link before anyone clicks it; the code still works.
+     ```html
+     <p>Your AltaTinder sign-in code: <strong>{{ .Token }}</strong></p>
+     ```
    - Leave **Allow new users to sign up** on. The database itself rejects any address that isn't `@altatechnologies.com`.
 5. **Email delivery** — Supabase's built-in sender only emails members of your Supabase organization, and only 2 emails an hour for the whole project. Pick one:
    - **Small team:** invite each person to your Supabase organization (Organization → Team). Fine for a handful of people, since each person signs in once per device and stays signed in.
@@ -20,7 +24,7 @@ Schema changes later: add a new file in `supabase/migrations/` (e.g. `2026120100
 
 ## Trying it without Supabase
 
-Set `window.DEMO = true` in `config.js`, run `python3 -m http.server` in this folder, open http://localhost:8000. Any @altatechnologies.com address signs you in (the fake email link clicks itself after a couple of seconds). Data is kept in that browser only; sign out and back in with another address to act as a second person. Set it back to `false` before pushing.
+Set `window.DEMO = true` in `config.js`, run `python3 -m http.server` in this folder, open http://localhost:8000. Any @altatechnologies.com address and any code signs you in. Data is kept in that browser only; sign out and back in with another address to act as a second person. Set it back to `false` before pushing.
 
 ## Pages
 

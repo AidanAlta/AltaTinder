@@ -130,11 +130,11 @@ function authMessage(e) {
   if (code === "email_address_not_authorized") return "Sign-in emails can't reach this address yet. Ask the app admin to add you.";
   if (code === "over_email_send_rate_limit" || /rate limit/i.test(msg)) return "Too many sign-in emails were sent recently. Wait a while and try again.";
   if (/security purposes|only request this after/i.test(msg)) return "Wait a minute before asking for another link.";
-  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That sign-in link has expired or was already used. Send a new one.";
+  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That link or code has expired or was already used. Type the code from your newest sign-in email instead, or send a new one.";
   return msg;
 }
 
-// Email a sign-in link. Resolves with the signed-in email once the link has been clicked
+// Email a sign-in code (the email also has a link). Resolves with the signed-in email once the link has been clicked
 // (in this tab, or in another tab of the same browser).
 function signIn() {
   return new Promise((resolve) => {
@@ -155,7 +155,7 @@ function signIn() {
     const askEmail = () => {
       clearInterval(waiting);
       const email = el("input", { type: "email", placeholder: "you" + DOMAIN, value: store("last_email") || "", autocomplete: "email", style: "flex:1;min-width:0" });
-      const send = el("button", { class: "primary" }, "Email me a link");
+      const send = el("button", { class: "primary" }, "Send sign-in email");
       const submit = async (e) => {
         e.preventDefault();
         const addr = email.value.trim().toLowerCase();
@@ -166,28 +166,43 @@ function signIn() {
         send.textContent = "Sending…";
         const { error } = await db.auth.signInWithOtp({ email: addr, options: { emailRedirectTo: location.origin + location.pathname } });
         send.disabled = false;
-        send.textContent = "Email me a link";
+        send.textContent = "Send sign-in email";
         if (error) return say(authMessage(error));
         store("last_email", addr);
         checkInbox(addr);
       };
       fill(app,
         el("h2", null, "Sign in"),
-        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in link."),
+        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in code."),
         el("form", { class: "row", onsubmit: submit }, email, send),
         note);
       email.focus();
     };
 
     const checkInbox = (addr) => {
+      const code = el("input", { inputmode: "numeric", autocomplete: "one-time-code", placeholder: "Code from the email", maxlength: 10, style: "flex:1;min-width:0;letter-spacing:.1em" });
+      const go = el("button", { class: "primary" }, "Sign in");
+      const submit = async (e) => {
+        e.preventDefault();
+        const token = code.value.replace(/\D/g, "");
+        if (!token) return code.focus();
+        go.disabled = true;
+        const { error } = await db.auth.verifyOtp({ email: addr, token, type: "email" });
+        go.disabled = false;
+        if (error) { say(authMessage(error)); return code.select(); }
+        done(addr);
+      };
       say("");
       fill(app,
         el("h2", null, "Check your email"),
-        el("p", null, "We sent a sign-in link to ", el("b", null, addr), ". Click it and you're in."),
-        el("p", { class: "muted" }, "Open it in this browser to stay signed in here. Nothing yet? Check junk mail, or ",
-          el("button", { class: "link", onclick: askEmail }, "send it again"), "."),
-        note);
-      // The link usually opens a new tab; this tab notices the sign-in and carries on.
+        el("p", null, "We sent a sign-in email to ", el("b", null, addr), ". Type the code from it below."),
+        el("form", { class: "row", onsubmit: submit }, code, go),
+        note,
+        el("p", { class: "muted" }, "Nothing yet? Check junk mail, or ",
+          el("button", { class: "link", onclick: askEmail }, "send a new one"),
+          ". Only the newest email works."));
+      code.focus();
+      // If they click the link instead and it opens a new tab, this tab notices and carries on.
       waiting = setInterval(check, 2000);
       window.addEventListener("focus", check);
     };

@@ -1,6 +1,6 @@
 // Demo mode: set window.DEMO = true in config.js to run with no database.
 // Everything is saved in this browser only (localStorage). Sign out and back in with another
-// @altatechnologies.com address (the fake link signs you in after ~2s) to act as a different person. Clear it with localStorage.removeItem("fakedb").
+// @altatechnologies.com address (any code works) to act as a different person. Clear it with localStorage.removeItem("fakedb").
 if (window.DEMO) {
   window.supabase = { createClient() {
     const load = () => JSON.parse(localStorage.fakedb || '{"decks":[],"items":[],"swipes":[],"comments":[],"seq":1}');
@@ -47,11 +47,12 @@ if (window.DEMO) {
         return { data: this.one ? out[0] ?? null : out, error: null };
       }
     }
-    // Fake sign-in: any @altatechnologies.com address; the fake link signs you in.
+    // Fake sign-in: any @altatechnologies.com address; any code works.
   const auth = {
     async getSession() { const e = localStorage.demo_email; return { data: { session: e ? { user: { email: e } } : null }, error: null }; },
     // Pretend the link was clicked a moment after it was "sent".
-    async signInWithOtp({ email }) { setTimeout(() => (localStorage.demo_email = email), 1500); return { error: null }; },
+    async signInWithOtp() { return { error: null }; },
+    async verifyOtp({ email }) { localStorage.demo_email = email; return { data: {}, error: null }; },
     async signOut() { localStorage.removeItem("demo_email"); return { error: null }; },
     onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
   };
@@ -63,7 +64,7 @@ if (window.DEMO) {
   window.SUPABASE_URL = "demo";
   document.addEventListener("DOMContentLoaded", () => {
     const b = document.createElement("div");
-    b.textContent = "Demo mode — sign-in links click themselves. Data is saved in this browser only.";
+    b.textContent = "Demo mode — any code signs you in. Data is saved in this browser only.";
     b.style.cssText = "background:#ffe7a8;text-align:center;padding:6px;font-size:13px";
     document.body.prepend(b);
   });
