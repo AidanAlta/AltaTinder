@@ -65,3 +65,5 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 }
 .who { white-space: nowrap; font-size: 14px; }
 .form-error { color: #b3261e; min-height: 1.2em; margin: 0 0 10px; }
+.stack { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin-bottom: 10px; }
+.stack button { align-self: flex-start; }

@@ -10,21 +10,17 @@ Static HTML/JS on GitHub Pages + Supabase Postgres.
    (Or skip the integration and paste each file in `supabase/migrations/` into the SQL editor, oldest first.)
 3. **Config** — copy the project URL and anon (publishable) key from Project Settings → API into `config.js`, commit, push.
 4. **Sign-in settings** (Supabase dashboard → Authentication):
-   - **URL Configuration** → Site URL `https://aidanalta.github.io/AltaTinder/`, and add the same address under Redirect URLs.
-   - **Emails** → in both **Magic link** and **Confirm signup**, add this line so the email carries a code. Outlook's link scanner often uses up the link before anyone clicks it; the code still works.
-     ```html
-     <p>Your AltaTinder sign-in code: <strong>{{ .Token }}</strong></p>
-     ```
-   - Leave **Allow new users to sign up** on. The database itself rejects any address that isn't `@altatechnologies.com`.
-5. **Email delivery** — Supabase's built-in sender only emails members of your Supabase organization, and only 2 emails an hour for the whole project. Pick one:
-   - **Small team:** invite each person to your Supabase organization (Organization → Team). Fine for a handful of people, since each person signs in once per device and stays signed in.
-   - **Anyone at Alta:** set up custom SMTP (Authentication → SMTP Settings), e.g. Alta's Microsoft 365 mail or a provider like Resend/Brevo with altatechnologies.com verified. Usually needs IT for the DNS records.
+   - **Sign In / Providers** → turn **Allow new users to sign up** off. Logins are created by the admin only.
+   - **Users → Add user → Create new user** for each person: their `@altatechnologies.com` email, a temporary password, and tick **Auto Confirm User**. Send them the password; they can change it from the header after signing in.
+   - Forgot password: delete their login under **Users** and add it again with a new temporary password. Votes and comments are stored by email, so nothing is lost.
+
+No sign-in emails are sent, so Supabase's email limits don't apply.
 
 Schema changes later: add a new file in `supabase/migrations/` (e.g. `20261201000000_add_tags.sql`). Never edit a migration that has already run.
 
 ## Trying it without Supabase
 
-Set `window.DEMO = true` in `config.js`, run `python3 -m http.server` in this folder, open http://localhost:8000. Any @altatechnologies.com address and any code signs you in. Data is kept in that browser only; sign out and back in with another address to act as a second person. Set it back to `false` before pushing.
+Set `window.DEMO = true` in `config.js`, run `python3 -m http.server` in this folder, open http://localhost:8000. Any @altatechnologies.com address and any password signs you in. Data is kept in that browser only; sign out and back in with another address to act as a second person. Set it back to `false` before pushing.
 
 ## Pages
 
@@ -34,7 +30,7 @@ Set `window.DEMO = true` in `config.js`, run `python3 -m http.server` in this fo
 
 ## Notes
 
-- Sign-in is required on every page. Only verified `@altatechnologies.com` accounts can create an account or read anything; the public key on its own gets nothing.
+- Sign-in (email + password) is required on every page. Only `@altatechnologies.com` logins can exist, and only signed-in users can read anything; the public key on its own gets nothing.
 - Votes and comments are saved under the signed-in email, and the database refuses a vote or comment under anyone else's. People show by the part before the @ (e.g. `aknicely`).
 - The database refuses deletes on decks, items and comments. Archiving is the only way to retire a deck. People can only undo their own swipes.
 - Verdicts: *disputed* = at least one yes and one no; *consensus* = two or more votes, all the same.

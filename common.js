@@ -96,15 +96,6 @@ function start(fn) {
   })().catch(showError);
 }
 
-// A failed sign-in link lands back here with the error in the address bar.
-function linkError() {
-  const p = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
-  const msg = p.get("error_description");
-  if (!msg) return "";
-  history.replaceState(null, "", location.pathname);
-  return authMessage({ code: p.get("error_code") || "", message: msg });
-}
-
 async function currentEmail() {
   const { data } = await db.auth.getSession();
   const email = data.session?.user?.email?.toLowerCase();
@@ -115,6 +106,7 @@ function showWho() {
   document.querySelector("header .who")?.remove();
   document.querySelector("header").append(
     el("span", { class: "who muted" }, shortName(me), " · ",
+      el("button", { class: "link", onclick: changePassword }, "Change password"), " · ",
       el("button", { class: "link", onclick: () => signOut() }, "Sign out")));
 }
 
@@ -126,88 +118,70 @@ async function signOut() {
 
 function authMessage(e) {
   const code = e?.code || "", msg = e?.message || String(e);
-  if (/database error saving new user|altatechnologies/i.test(msg)) return "Only @altatechnologies.com email addresses can sign in.";
-  if (code === "email_address_not_authorized") return "Sign-in emails can't reach this address yet. Ask the app admin to add you.";
-  if (code === "over_email_send_rate_limit" || /rate limit/i.test(msg)) return "Too many sign-in emails were sent recently. Wait a while and try again.";
-  if (/security purposes|only request this after/i.test(msg)) return "Wait a minute before asking for another link.";
-  if (code === "otp_expired" || /expired|invalid/i.test(msg)) return "That sign-in link has expired or was already used. Send a new one and use the newest email.";
+  if (/database error|altatechnologies/i.test(msg)) return "Only @altatechnologies.com accounts can sign in.";
+  if (code === "invalid_credentials" || /invalid login credentials/i.test(msg)) return "Wrong email or password.";
+  if (code === "email_not_confirmed" || /not confirmed/i.test(msg)) return "This login isn't active yet. Ask the app admin to confirm it.";
+  if (code === "weak_password" || /password should be/i.test(msg)) return "Pick a longer password (at least 8 characters).";
+  if (code === "same_password" || /different from the old/i.test(msg)) return "That's your current password. Pick a new one.";
+  if (/rate limit|too many/i.test(msg)) return "Too many attempts. Wait a few minutes and try again.";
   return msg;
 }
 
-// Email a sign-in link (plus a code, once the email template includes one). Resolves with the signed-in email once the link has been clicked
-// (in this tab, or in another tab of the same browser).
+// Email + password. Logins are created by the app admin in Supabase (Authentication → Users → Add user).
 function signIn() {
   return new Promise((resolve) => {
     const note = el("p", { class: "form-error", role: "alert" });
-    const say = (text) => (note.textContent = text || "");
-    let waiting = null;
-
-    const done = (email) => {
-      clearInterval(waiting);
-      window.removeEventListener("focus", check);
-      resolve(email);
+    const email = el("input", { type: "email", placeholder: "you" + DOMAIN, value: store("last_email") || "", autocomplete: "username", "aria-label": "Email" });
+    const password = el("input", { type: "password", placeholder: "Password", autocomplete: "current-password", "aria-label": "Password" });
+    const go = el("button", { class: "primary" }, "Sign in");
+    const submit = async (e) => {
+      e.preventDefault();
+      const addr = email.value.trim().toLowerCase();
+      if (!addr) return email.focus();
+      if (!addr.endsWith(DOMAIN)) { note.textContent = "Use your " + DOMAIN + " email."; return email.focus(); }
+      if (!password.value) return password.focus();
+      note.textContent = "";
+      go.disabled = true;
+      go.textContent = "Signing in…";
+      const { error } = await db.auth.signInWithPassword({ email: addr, password: password.value });
+      go.disabled = false;
+      go.textContent = "Sign in";
+      if (error) { note.textContent = authMessage(error); return password.select(); }
+      store("last_email", addr);
+      resolve(addr);
     };
-    const check = async () => {
-      const email = await currentEmail();
-      if (email) done(email);
-    };
-
-    const askEmail = () => {
-      clearInterval(waiting);
-      const email = el("input", { type: "email", placeholder: "you" + DOMAIN, value: store("last_email") || "", autocomplete: "email", style: "flex:1;min-width:0" });
-      const send = el("button", { class: "primary" }, "Send sign-in email");
-      const submit = async (e) => {
-        e.preventDefault();
-        const addr = email.value.trim().toLowerCase();
-        if (!addr) return email.focus();
-        if (!addr.endsWith(DOMAIN)) { say("Use your " + DOMAIN + " email."); return email.focus(); }
-        say("");
-        send.disabled = true;
-        send.textContent = "Sending…";
-        const { error } = await db.auth.signInWithOtp({ email: addr, options: { emailRedirectTo: location.origin + location.pathname } });
-        send.disabled = false;
-        send.textContent = "Send sign-in email";
-        if (error) return say(authMessage(error));
-        store("last_email", addr);
-        checkInbox(addr);
-      };
-      fill(app,
-        el("h2", null, "Sign in"),
-        el("p", { class: "muted" }, "Use your Alta email. We'll email you a sign-in link."),
-        el("form", { class: "row", onsubmit: submit }, email, send),
-        note);
-      email.focus();
-    };
-
-    const checkInbox = (addr) => {
-      const code = el("input", { inputmode: "numeric", autocomplete: "one-time-code", placeholder: "Code (if your email has one)", maxlength: 10, style: "flex:1;min-width:0;letter-spacing:.1em" });
-      const go = el("button", { class: "primary" }, "Sign in");
-      const submit = async (e) => {
-        e.preventDefault();
-        const token = code.value.replace(/\D/g, "");
-        if (!token) return code.focus();
-        go.disabled = true;
-        const { error } = await db.auth.verifyOtp({ email: addr, token, type: "email" });
-        go.disabled = false;
-        if (error) { say(authMessage(error)); return code.select(); }
-        done(addr);
-      };
-      say("");
-      fill(app,
-        el("h2", null, "Check your email"),
-        el("p", null, "We sent a sign-in email to ", el("b", null, addr), ". Click the link in it, or type the code if it has one."),
-        el("form", { class: "row", onsubmit: submit }, code, go),
-        note,
-        el("p", { class: "muted" }, "Nothing yet? Check junk mail, or ",
-          el("button", { class: "link", onclick: askEmail }, "send a new one"),
-          ". Only the newest email works."));
-      code.focus();
-      // If they click the link instead and it opens a new tab, this tab notices and carries on.
-      waiting = setInterval(check, 2000);
-      window.addEventListener("focus", check);
-    };
-
-    askEmail();
-    say(linkError());
+    fill(app,
+      el("h2", null, "Sign in"),
+      el("form", { class: "stack", onsubmit: submit }, email, password, go),
+      note,
+      el("p", { class: "muted" }, "No login yet, or forgot your password? Ask the app admin to set one up for you."));
+    (email.value ? password : email).focus();
   });
+}
+
+function changePassword() {
+  const dlg = el("dialog");
+  const note = el("p", { class: "form-error", role: "alert" });
+  const pw1 = el("input", { type: "password", placeholder: "New password (8+ characters)", autocomplete: "new-password", "aria-label": "New password" });
+  const pw2 = el("input", { type: "password", placeholder: "Type it again", autocomplete: "new-password", "aria-label": "Repeat new password" });
+  const save = el("button", { class: "primary" }, "Save password");
+  const close = () => { dlg.close(); dlg.remove(); };
+  const submit = async (e) => {
+    e.preventDefault();
+    if (pw1.value.length < 8) { note.textContent = "Use at least 8 characters."; return pw1.focus(); }
+    if (pw1.value !== pw2.value) { note.textContent = "The two passwords don't match."; return pw2.select(); }
+    save.disabled = true;
+    const { error } = await db.auth.updateUser({ password: pw1.value });
+    save.disabled = false;
+    if (error) { note.textContent = authMessage(error); return; }
+    fill(dlg, el("p", null, "Password changed."), el("div", { class: "row" }, el("button", { class: "primary", onclick: close }, "OK")));
+  };
+  fill(dlg,
+    el("div", { class: "row" }, el("b", { style: "margin-right:auto" }, "Change password"), el("button", { class: "link", onclick: close }, "Cancel")),
+    el("form", { class: "stack", onsubmit: submit }, pw1, pw2, save),
+    note);
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  pw1.focus();
 }
